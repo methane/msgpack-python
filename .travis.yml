@@ -6,42 +6,62 @@ python:
   # Available Python (PyPy) can be listed by:
   #
   #   $ aws s3 ls s3://travis-python-archives/binaries/ubuntu/16.04/x86_64/
-  - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.6"
-  - "3.7"
-  - "3.8-dev"
+  #- "2.7"
+  #- "3.4"
+  #- "3.5"
+  #- "3.6"
+  #- "3.7"
+  #- "3.8-dev"
 
 matrix:
   include:
-    - name: 32bit build
-      sudo: required
-      language: python
-      services:
-        - docker
+    #- name: 32bit build
+    #  sudo: required
+    #  language: python
+    #  services:
+    #    - docker
+    #  env:
+    #    - DOCKER_IMAGE=quay.io/pypa/manylinux1_i686
+    #  install:
+    #    - pip install -U pip
+    #    - pip install -r requirements.txt
+    #    - make cython
+    #    - docker pull $DOCKER_IMAGE
+    #  script:
+    #    - docker run --rm -v `pwd`:/io -w /io $DOCKER_IMAGE /io/docker/runtests.sh
+    #- name: "pypy2.7"
+    #  python: "pypy2.7-7.1.1"
+    #  install:
+    #    - pip install -e .
+    #  script:
+    #    - py.test -v test
+    #- name: "pypy3"
+    #  python: "pypy3.6-7.1.1"
+    #  install:
+    #    - pip install -e .
+    #  script:
+    #    - pytest -v test
+    - name: "macos"
+      os: osx
+      language: shell
+      #addons:
+      #  homebrew:
+      #    packages:
+      #      - pyenv
       env:
-        - DOCKER_IMAGE=quay.io/pypa/manylinux1_i686
+        PATH: $HOME/.$HOME/.pyenv/shims:$PATH
+        MACOSX_DEPLOYMENT_TARGET: "10.10"
       install:
-        - pip install -U pip
-        - pip install -r requirements.txt
+        - pyenv versions
+        - pyenv install -l | grep '3\.[5-9]\.'
+        - pyenv install 3.6.9
+        - pyenv install 3.7.4
+        - pyenv global 3.7.4 3.6.9
+        - pip3 install -r requirements.txt
+        - pyenv rehash
         - make cython
-        - docker pull $DOCKER_IMAGE
-      script:
-        - docker run --rm -v `pwd`:/io -w /io $DOCKER_IMAGE /io/docker/runtests.sh
-    - name: "pypy2.7"
-      python: "pypy2.7-7.1.1"
-      install:
-        - pip install -e .
-      script:
-        - py.test -v test
-    - name: "pypy3"
-      python: "pypy3.6-7.1.1"
-      install:
-        - pip install -e .
-      script:
-        - pytest -v test
-
+        - python3.7 setup.py bdist_wheel
+        - python3.6 setup.py bdist_wheel
 
 install:
   - pip install -U pip
@@ -55,5 +75,15 @@ script:
   - python -c 'from msgpack import _cmsgpack'
   - pytest -v test
   - MSGPACK_PUREPYTHON=x pytest -v test
+
+deploy:
+  provider: releases
+  api_key:
+    secure: IsOtXLtbrk7hFrFJlR8TwZ/MEBRmUpYyJMZEMZ2quz30/BZoI+wDa4WWJrcFVW1TzitIkUlN14ULPp1raIJnzALqkTjlI4hZE+9ncKnobM+yObPJZIMKMvTKTmUT256uOdlSMos6I4xDLuVqkQWmNYRd3BXAfpkjFhc6/pj6LkE=
+  file_glob: true
+  file: "dist/*.whl"
+  on:
+    repo: msgpack/msgpack-python
+    tags: true
 
 # vim: sw=2 ts=2
