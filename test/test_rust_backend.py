@@ -49,14 +49,21 @@ def test_default_read_extended_type():
 
 def test_top_level_helpers_use_rust_backend():
     import io
+    import os
 
     import msgpack
     from msgpack import _cmsgpack
 
-    assert msgpack.pack is _cmsgpack.pack
-    assert msgpack.packb is _cmsgpack.packb
-    assert msgpack.unpack is _cmsgpack.unpack
-    assert msgpack.unpackb is _cmsgpack.unpackb
+    if os.environ.get("MSGPACK_PUREPYTHON"):
+        assert msgpack.pack is not _cmsgpack.pack
+        assert msgpack.packb is not _cmsgpack.packb
+        assert msgpack.unpack is not _cmsgpack.unpack
+        assert msgpack.unpackb is not _cmsgpack.unpackb
+    else:
+        assert msgpack.pack is _cmsgpack.pack
+        assert msgpack.packb is _cmsgpack.packb
+        assert msgpack.unpack is _cmsgpack.unpack
+        assert msgpack.unpackb is _cmsgpack.unpackb
 
     stream = io.BytesIO()
     msgpack.pack({"value": 1}, stream)

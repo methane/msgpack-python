@@ -431,17 +431,17 @@ fn default_read_extended_type(typecode: i8, _data: &Bound<'_, PyAny>) -> PyResul
     )))
 }
 
-fn new_packer(
-    py: Python<'_>,
-    kwargs: Option<&Bound<'_, PyDict>>,
-) -> PyResult<Bound<'_, PyAny>> {
+fn new_packer<'py>(
+    py: Python<'py>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
     py.get_type::<Packer>().call((), kwargs)
 }
 
-fn new_unpacker(
-    py: Python<'_>,
-    kwargs: Option<&Bound<'_, PyDict>>,
-) -> PyResult<Bound<'_, PyAny>> {
+fn new_unpacker<'py>(
+    py: Python<'py>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
     py.get_type::<Unpacker>().call((py.None(),), kwargs)
 }
 
@@ -467,13 +467,13 @@ fn unpackb_impl(
     let value = match unpacker.call_method0("_unpack") {
         Ok(value) => value,
         Err(err) => {
-            let err_type_name = err.get_type(py).name()?.to_str()?;
+            let err_type_name = err.get_type(py).name()?.to_string_lossy().into_owned();
             if err_type_name == "OutOfData" {
                 return Err(PyValueError::new_err("Unpack failed: incomplete input"));
             }
             if err.is_instance_of::<PyRecursionError>(py) {
                 let stack_error = py.import("msgpack.exceptions")?.getattr("StackError")?;
-                return Err(PyErr::from_value(&stack_error.call0()?));
+                return Err(PyErr::from_value(stack_error.call0()?));
             }
             return Err(err);
         }
@@ -482,7 +482,7 @@ fn unpackb_impl(
     if unpacker.call_method0("_got_extradata")?.is_truthy()? {
         let extra_data = py.import("msgpack.exceptions")?.getattr("ExtraData")?;
         let extra = unpacker.call_method0("_get_extradata")?;
-        return Err(PyErr::from_value(&extra_data.call1((value.clone(), extra))?));
+        return Err(PyErr::from_value(extra_data.call1((value.clone(), extra))?));
     }
 
     Ok(value.into())
