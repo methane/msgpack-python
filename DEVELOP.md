@@ -3,7 +3,7 @@
 ### Build
 
 ```
-$ make cython
+$ make all
 ```
 
 

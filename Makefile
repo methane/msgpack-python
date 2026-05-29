@@ -1,7 +1,7 @@
 PYTHON_SOURCES = msgpack test setup.py
 
 .PHONY: all
-all: cython
+all:
 	python setup.py build_ext -i -f
 
 .PHONY: format
@@ -20,12 +20,8 @@ doc:
 pyupgrade:
 	@find $(PYTHON_SOURCES) -name '*.py' -type f -exec pyupgrade --py37-plus '{}' \;
 
-.PHONY: cython
-cython:
-	cython msgpack/_cmsgpack.pyx
-
 .PHONY: test
-test: cython
+test:
 	pip install -e .
 	pytest -v test
 	MSGPACK_PUREPYTHON=1 pytest -v test
@@ -40,6 +36,7 @@ clean:
 	rm -f msgpack/_cmsgpack.cpp
 	rm -f msgpack/_cmsgpack.*.so
 	rm -f msgpack/_cmsgpack.*.pyd
+	rm -rf target
 	rm -rf msgpack/__pycache__
 	rm -rf test/__pycache__
 

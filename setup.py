@@ -2,31 +2,23 @@
 import os
 import sys
 
-from setuptools import Extension, setup
+from setuptools import setup
+from setuptools_rust import Binding, RustExtension
 
 PYPY = hasattr(sys, "pypy_version_info")
 
-libraries = []
-macros = []
-ext_modules = []
-
-if sys.platform == "win32":
-    libraries.append("ws2_32")
-    macros = [("__LITTLE_ENDIAN__", "1")]
-
+rust_extensions = []
 if not PYPY and not os.environ.get("MSGPACK_PUREPYTHON"):
-    ext_modules.append(
-        Extension(
+    rust_extensions.append(
+        RustExtension(
             "msgpack._cmsgpack",
-            sources=["msgpack/_cmsgpack.c"],
-            libraries=libraries,
-            include_dirs=["."],
-            define_macros=macros,
+            path="Cargo.toml",
+            binding=Binding.PyO3,
         )
     )
-del libraries, macros
 
 setup(
-    ext_modules=ext_modules,
+    rust_extensions=rust_extensions,
     packages=["msgpack"],
+    zip_safe=False,
 )

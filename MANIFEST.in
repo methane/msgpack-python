@@ -1,5 +1,7 @@
 include setup.py
 include COPYING
 include README.md
+include Cargo.toml
+recursive-include src *.rs
 recursive-include msgpack *.h *.c *.pyx
 recursive-include test *.py

@@ -18,7 +18,7 @@ $ pip install msgpack
 
 ### Pure Python implementation
 
-The extension module in msgpack (`msgpack._cmsgpack`) does not support PyPy.
+The Rust extension module in msgpack (`msgpack._cmsgpack`) does not support PyPy.
 
 But msgpack provides a pure Python implementation (`msgpack.fallback`) for PyPy.
 
