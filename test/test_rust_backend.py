@@ -4,6 +4,9 @@ from pytest import raises
 def test_cmsgpack_module_symbols():
     from msgpack import _cmsgpack
 
+    assert _cmsgpack.pack
+    assert _cmsgpack.packb
+    assert _cmsgpack.unpack
     assert _cmsgpack.Packer
     assert _cmsgpack.Unpacker
     assert _cmsgpack.unpackb
@@ -42,3 +45,22 @@ def test_default_read_extended_type():
 
     with raises(NotImplementedError, match="Cannot decode extended type with typecode=1"):
         _cmsgpack.default_read_extended_type(1, b"data")
+
+
+def test_top_level_helpers_use_rust_backend():
+    import io
+
+    import msgpack
+    from msgpack import _cmsgpack
+
+    assert msgpack.pack is _cmsgpack.pack
+    assert msgpack.packb is _cmsgpack.packb
+    assert msgpack.unpack is _cmsgpack.unpack
+    assert msgpack.unpackb is _cmsgpack.unpackb
+
+    stream = io.BytesIO()
+    msgpack.pack({"value": 1}, stream)
+    stream.seek(0)
+
+    assert msgpack.packb([1, 2, 3]) == b"\x93\x01\x02\x03"
+    assert msgpack.unpack(stream) == {"value": 1}

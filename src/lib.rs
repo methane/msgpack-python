@@ -1,4 +1,6 @@
-use pyo3::exceptions::{PyBufferError, PyNotImplementedError, PyStopIteration};
+use pyo3::exceptions::{
+    PyBufferError, PyNotImplementedError, PyRecursionError, PyStopIteration, PyValueError,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -429,21 +431,115 @@ fn default_read_extended_type(typecode: i8, _data: &Bound<'_, PyAny>) -> PyResul
     )))
 }
 
+fn new_packer(
+    py: Python<'_>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Bound<'_, PyAny>> {
+    py.get_type::<Packer>().call((), kwargs)
+}
+
+fn new_unpacker(
+    py: Python<'_>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Bound<'_, PyAny>> {
+    py.get_type::<Unpacker>().call((py.None(),), kwargs)
+}
+
+fn unpackb_impl(
+    py: Python<'_>,
+    packed: &Bound<'_, PyAny>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<PyObject> {
+    let kwargs = match kwargs {
+        Some(kwargs) => {
+            let copied = PyDict::new(py);
+            copied.update(kwargs.as_mapping())?;
+            copied
+        }
+        None => PyDict::new(py),
+    };
+    if !kwargs.contains("max_buffer_size")? {
+        kwargs.set_item("max_buffer_size", packed.len()?)?;
+    }
+
+    let unpacker = new_unpacker(py, Some(&kwargs))?;
+    unpacker.call_method1("feed", (packed,))?;
+    let value = match unpacker.call_method0("_unpack") {
+        Ok(value) => value,
+        Err(err) => {
+            let err_type_name = err.get_type(py).name()?.to_str()?;
+            if err_type_name == "OutOfData" {
+                return Err(PyValueError::new_err("Unpack failed: incomplete input"));
+            }
+            if err.is_instance_of::<PyRecursionError>(py) {
+                let stack_error = py.import("msgpack.exceptions")?.getattr("StackError")?;
+                return Err(PyErr::from_value(&stack_error.call0()?));
+            }
+            return Err(err);
+        }
+    };
+
+    if unpacker.call_method0("_got_extradata")?.is_truthy()? {
+        let extra_data = py.import("msgpack.exceptions")?.getattr("ExtraData")?;
+        let extra = unpacker.call_method0("_get_extradata")?;
+        return Err(PyErr::from_value(&extra_data.call1((value.clone(), extra))?));
+    }
+
+    Ok(value.into())
+}
+
+#[pyfunction(signature = (obj, **kwargs))]
+fn packb(py: Python<'_>, obj: &Bound<'_, PyAny>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<PyObject> {
+    let packer = new_packer(py, kwargs)?;
+    Ok(packer.call_method1("pack", (obj,))?.into())
+}
+
+#[pyfunction(signature = (obj, stream, **kwargs))]
+fn pack(
+    py: Python<'_>,
+    obj: &Bound<'_, PyAny>,
+    stream: &Bound<'_, PyAny>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<()> {
+    let packed = packb(py, obj, kwargs)?;
+    stream.call_method1("write", (packed,))?;
+    Ok(())
+}
+
+#[pyfunction(signature = (stream, **kwargs))]
+fn unpack(
+    py: Python<'_>,
+    stream: &Bound<'_, PyAny>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<PyObject> {
+    let packed = stream.call_method0("read")?;
+    unpackb_impl(py, &packed, kwargs)
+}
+
+#[pyfunction(signature = (packed, **kwargs))]
+fn unpackb(
+    py: Python<'_>,
+    packed: &Bound<'_, PyAny>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<PyObject> {
+    unpackb_impl(py, packed, kwargs)
+}
+
 #[pymodule]
 fn _cmsgpack(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let fallback = py.import("msgpack.fallback")?;
     let exceptions = py.import("msgpack.exceptions")?;
     let datetime = py.import("datetime")?;
 
     m.add_class::<Packer>()?;
     m.add_class::<Unpacker>()?;
-    for name in ["unpackb"] {
-        m.add(name, fallback.getattr(name)?)?;
-    }
     for name in ["BufferFull", "ExtraData", "FormatError", "OutOfData", "StackError"] {
         m.add(name, exceptions.getattr(name)?)?;
     }
     m.add("datetime", datetime)?;
+    m.add_function(wrap_pyfunction!(pack, m)?)?;
+    m.add_function(wrap_pyfunction!(packb, m)?)?;
+    m.add_function(wrap_pyfunction!(unpack, m)?)?;
+    m.add_function(wrap_pyfunction!(unpackb, m)?)?;
     m.add_function(wrap_pyfunction!(default_read_extended_type, m)?)?;
     Ok(())
 }

@@ -10,46 +10,53 @@ __version__ = "1.1.2"
 
 if os.environ.get("MSGPACK_PUREPYTHON"):
     from .fallback import Packer, Unpacker, unpackb
+    _using_cmsgpack = False
 else:
     try:
-        from ._cmsgpack import Packer, Unpacker, unpackb
+        from ._cmsgpack import Packer, Unpacker, pack, packb, unpack, unpackb
+        _using_cmsgpack = True
     except ImportError:
         from .fallback import Packer, Unpacker, unpackb
+        _using_cmsgpack = False
 
 
-def pack(o, stream, **kwargs):
-    """
-    Pack object `o` and write it to `stream`
+if not _using_cmsgpack:
 
-    See :class:`Packer` for options.
-    """
-    packer = Packer(**kwargs)
-    stream.write(packer.pack(o))
+    def pack(o, stream, **kwargs):
+        """
+        Pack object `o` and write it to `stream`
 
+        See :class:`Packer` for options.
+        """
+        packer = Packer(**kwargs)
+        stream.write(packer.pack(o))
 
-def packb(o, **kwargs):
-    """
-    Pack object `o` and return packed bytes
+    def packb(o, **kwargs):
+        """
+        Pack object `o` and return packed bytes
 
-    See :class:`Packer` for options.
-    """
-    return Packer(**kwargs).pack(o)
+        See :class:`Packer` for options.
+        """
+        return Packer(**kwargs).pack(o)
 
+    def unpack(stream, **kwargs):
+        """
+        Unpack an object from `stream`.
 
-def unpack(stream, **kwargs):
-    """
-    Unpack an object from `stream`.
+        Raises `ExtraData` when `stream` contains extra bytes.
+        See :class:`Unpacker` for options.
+        """
+        data = stream.read()
+        return unpackb(data, **kwargs)
 
-    Raises `ExtraData` when `stream` contains extra bytes.
-    See :class:`Unpacker` for options.
-    """
-    data = stream.read()
-    return unpackb(data, **kwargs)
+    # alias for compatibility to simplejson/marshal/pickle.
+    load = unpack
+    loads = unpackb
 
-
-# alias for compatibility to simplejson/marshal/pickle.
-load = unpack
-loads = unpackb
-
-dump = pack
-dumps = packb
+    dump = pack
+    dumps = packb
+else:
+    load = unpack
+    loads = unpackb
+    dump = pack
+    dumps = packb
