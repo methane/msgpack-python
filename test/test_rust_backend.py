@@ -14,6 +14,17 @@ def test_cmsgpack_module_symbols():
     assert _cmsgpack.StackError
 
 
+def test_packer_is_rust_wrapped():
+    from msgpack import _cmsgpack
+    from msgpack.fallback import Packer as FallbackPacker
+
+    packer = _cmsgpack.Packer()
+
+    assert type(packer) is _cmsgpack.Packer
+    assert not isinstance(packer, FallbackPacker)
+    assert packer.pack([1, 2, 3]) == b"\x93\x01\x02\x03"
+
+
 def test_default_read_extended_type():
     from msgpack import _cmsgpack
 
