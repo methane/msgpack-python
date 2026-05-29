@@ -1,4 +1,4 @@
-use pyo3::exceptions::PyNotImplementedError;
+use pyo3::exceptions::{PyBufferError, PyNotImplementedError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -14,11 +14,11 @@ impl Packer {
         signature = (
             *,
             default=None,
-            use_single_float=false,
-            autoreset=true,
-            use_bin_type=true,
-            strict_types=false,
-            datetime=false,
+            use_single_float=None,
+            autoreset=None,
+            use_bin_type=None,
+            strict_types=None,
+            r#datetime=None,
             unicode_errors=None,
             buf_size=None
         )
@@ -26,14 +26,40 @@ impl Packer {
     fn new(
         py: Python<'_>,
         default: Option<PyObject>,
-        use_single_float: bool,
-        autoreset: bool,
-        use_bin_type: bool,
-        strict_types: bool,
-        r#datetime: bool,
+        use_single_float: Option<PyObject>,
+        autoreset: Option<PyObject>,
+        use_bin_type: Option<PyObject>,
+        strict_types: Option<PyObject>,
+        r#datetime: Option<PyObject>,
         unicode_errors: Option<&str>,
         buf_size: Option<usize>,
     ) -> PyResult<Self> {
+        let use_single_float = if let Some(obj) = use_single_float {
+            obj.bind(py).is_truthy()?
+        } else {
+            false
+        };
+        let autoreset = if let Some(obj) = autoreset {
+            obj.bind(py).is_truthy()?
+        } else {
+            true
+        };
+        let use_bin_type = if let Some(obj) = use_bin_type {
+            obj.bind(py).is_truthy()?
+        } else {
+            true
+        };
+        let strict_types = if let Some(obj) = strict_types {
+            obj.bind(py).is_truthy()?
+        } else {
+            false
+        };
+        let r#datetime = if let Some(obj) = r#datetime {
+            obj.bind(py).is_truthy()?
+        } else {
+            false
+        };
+
         let kwargs = PyDict::new(py);
         kwargs.set_item("default", default.unwrap_or_else(|| py.None()))?;
         kwargs.set_item("use_single_float", use_single_float)?;
@@ -53,7 +79,22 @@ impl Packer {
     }
 
     fn pack(&self, py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyObject> {
-        Ok(self.inner.bind(py).call_method1("pack", (obj,))?.into())
+        let inner = self.inner.bind(py);
+        let previous_bytes = inner.call_method0("bytes")?;
+        match inner.call_method1("pack", (obj,)) {
+            Ok(value) => Ok(value.into()),
+            Err(err) => {
+                if err.is_instance_of::<PyBufferError>(py)
+                    && !inner.getattr("_autoreset")?.is_truthy()?
+                {
+                    let bytes_io = py.import("io")?.getattr("BytesIO")?;
+                    let restored = bytes_io.call1((previous_bytes,))?;
+                    restored.call_method1("seek", (0, 2))?;
+                    inner.setattr("_buffer", restored)?;
+                }
+                Err(err)
+            }
+        }
     }
 
     fn pack_map_pairs(&self, py: Python<'_>, pairs: &Bound<'_, PyAny>) -> PyResult<PyObject> {
@@ -104,6 +145,10 @@ impl Packer {
 
     fn getbuffer(&self, py: Python<'_>) -> PyResult<PyObject> {
         Ok(self.inner.bind(py).call_method0("getbuffer")?.into())
+    }
+
+    fn __bytes__(&self, py: Python<'_>) -> PyResult<PyObject> {
+        Ok(self.inner.bind(py).call_method0("bytes")?.into())
     }
 
     fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<PyObject> {
