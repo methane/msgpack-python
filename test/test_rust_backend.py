@@ -25,6 +25,18 @@ def test_packer_is_rust_wrapped():
     assert packer.pack([1, 2, 3]) == b"\x93\x01\x02\x03"
 
 
+def test_unpacker_is_rust_wrapped():
+    from msgpack import _cmsgpack
+    from msgpack.fallback import Unpacker as FallbackUnpacker
+
+    unpacker = _cmsgpack.Unpacker()
+    unpacker.feed(b"\x93\x01\x02\x03")
+
+    assert type(unpacker) is _cmsgpack.Unpacker
+    assert not isinstance(unpacker, FallbackUnpacker)
+    assert unpacker.unpack() == [1, 2, 3]
+
+
 def test_default_read_extended_type():
     from msgpack import _cmsgpack
 

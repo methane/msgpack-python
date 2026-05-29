@@ -1,10 +1,68 @@
-use pyo3::exceptions::{PyBufferError, PyNotImplementedError};
+use pyo3::exceptions::{PyBufferError, PyNotImplementedError, PyStopIteration};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 #[pyclass(module = "msgpack._cmsgpack")]
 struct Packer {
     inner: Py<PyAny>,
+}
+
+#[pyclass(subclass, module = "msgpack._cmsgpack")]
+struct Unpacker {
+    inner: Py<PyAny>,
+}
+
+impl Unpacker {
+    #[allow(clippy::too_many_arguments)]
+    fn new_inner(
+        py: Python<'_>,
+        file_like: Option<PyObject>,
+        read_size: usize,
+        use_list: bool,
+        raw: bool,
+        timestamp: i64,
+        strict_map_key: bool,
+        object_hook: Option<PyObject>,
+        object_pairs_hook: Option<PyObject>,
+        list_hook: Option<PyObject>,
+        unicode_errors: Option<&str>,
+        max_buffer_size: usize,
+        ext_hook: Option<PyObject>,
+        max_str_len: isize,
+        max_bin_len: isize,
+        max_array_len: isize,
+        max_map_len: isize,
+        max_ext_len: isize,
+    ) -> PyResult<Py<PyAny>> {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("file_like", file_like.unwrap_or_else(|| py.None()))?;
+        kwargs.set_item("read_size", read_size)?;
+        kwargs.set_item("use_list", use_list)?;
+        kwargs.set_item("raw", raw)?;
+        kwargs.set_item("timestamp", timestamp)?;
+        kwargs.set_item("strict_map_key", strict_map_key)?;
+        kwargs.set_item("object_hook", object_hook.unwrap_or_else(|| py.None()))?;
+        kwargs.set_item(
+            "object_pairs_hook",
+            object_pairs_hook.unwrap_or_else(|| py.None()),
+        )?;
+        kwargs.set_item("list_hook", list_hook.unwrap_or_else(|| py.None()))?;
+        kwargs.set_item("unicode_errors", unicode_errors.unwrap_or("strict"))?;
+        kwargs.set_item("max_buffer_size", max_buffer_size)?;
+        let ext_hook = match ext_hook {
+            Some(ext_hook) => ext_hook,
+            None => py.import("msgpack.fallback")?.getattr("ExtType")?.unbind(),
+        };
+        kwargs.set_item("ext_hook", ext_hook)?;
+        kwargs.set_item("max_str_len", max_str_len)?;
+        kwargs.set_item("max_bin_len", max_bin_len)?;
+        kwargs.set_item("max_array_len", max_array_len)?;
+        kwargs.set_item("max_map_len", max_map_len)?;
+        kwargs.set_item("max_ext_len", max_ext_len)?;
+
+        let fallback_unpacker = py.import("msgpack.fallback")?.getattr("Unpacker")?;
+        Ok(fallback_unpacker.call((), Some(&kwargs))?.unbind())
+    }
 }
 
 #[pymethods]
@@ -76,6 +134,200 @@ impl Packer {
         Ok(Self {
             inner: inner.unbind(),
         })
+    }
+
+    #[pymethods]
+    impl Unpacker {
+        #[new]
+        #[allow(clippy::too_many_arguments)]
+        #[pyo3(
+            signature = (
+                file_like=None,
+                *,
+                read_size=0,
+                use_list=true,
+                raw=false,
+                timestamp=0,
+                strict_map_key=true,
+                object_hook=None,
+                object_pairs_hook=None,
+                list_hook=None,
+                unicode_errors=None,
+                max_buffer_size=100 * 1024 * 1024,
+                ext_hook=None,
+                max_str_len=-1,
+                max_bin_len=-1,
+                max_array_len=-1,
+                max_map_len=-1,
+                max_ext_len=-1
+            )
+        )]
+        fn new(
+            py: Python<'_>,
+            file_like: Option<PyObject>,
+            read_size: usize,
+            use_list: bool,
+            raw: bool,
+            timestamp: i64,
+            strict_map_key: bool,
+            object_hook: Option<PyObject>,
+            object_pairs_hook: Option<PyObject>,
+            list_hook: Option<PyObject>,
+            unicode_errors: Option<&str>,
+            max_buffer_size: usize,
+            ext_hook: Option<PyObject>,
+            max_str_len: isize,
+            max_bin_len: isize,
+            max_array_len: isize,
+            max_map_len: isize,
+            max_ext_len: isize,
+        ) -> PyResult<Self> {
+            Ok(Self {
+                inner: Self::new_inner(
+                    py,
+                    file_like,
+                    read_size,
+                    use_list,
+                    raw,
+                    timestamp,
+                    strict_map_key,
+                    object_hook,
+                    object_pairs_hook,
+                    list_hook,
+                    unicode_errors,
+                    max_buffer_size,
+                    ext_hook,
+                    max_str_len,
+                    max_bin_len,
+                    max_array_len,
+                    max_map_len,
+                    max_ext_len,
+                )?,
+            })
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        #[pyo3(
+            signature = (
+                file_like=None,
+                *,
+                read_size=0,
+                use_list=true,
+                raw=false,
+                timestamp=0,
+                strict_map_key=true,
+                object_hook=None,
+                object_pairs_hook=None,
+                list_hook=None,
+                unicode_errors=None,
+                max_buffer_size=100 * 1024 * 1024,
+                ext_hook=None,
+                max_str_len=-1,
+                max_bin_len=-1,
+                max_array_len=-1,
+                max_map_len=-1,
+                max_ext_len=-1
+            )
+        )]
+        fn __init__(
+            &mut self,
+            py: Python<'_>,
+            file_like: Option<PyObject>,
+            read_size: usize,
+            use_list: bool,
+            raw: bool,
+            timestamp: i64,
+            strict_map_key: bool,
+            object_hook: Option<PyObject>,
+            object_pairs_hook: Option<PyObject>,
+            list_hook: Option<PyObject>,
+            unicode_errors: Option<&str>,
+            max_buffer_size: usize,
+            ext_hook: Option<PyObject>,
+            max_str_len: isize,
+            max_bin_len: isize,
+            max_array_len: isize,
+            max_map_len: isize,
+            max_ext_len: isize,
+        ) -> PyResult<()> {
+            self.inner = Self::new_inner(
+                py,
+                file_like,
+                read_size,
+                use_list,
+                raw,
+                timestamp,
+                strict_map_key,
+                object_hook,
+                object_pairs_hook,
+                list_hook,
+                unicode_errors,
+                max_buffer_size,
+                ext_hook,
+                max_str_len,
+                max_bin_len,
+                max_array_len,
+                max_map_len,
+                max_ext_len,
+            )?;
+            Ok(())
+        }
+
+        fn feed(&self, py: Python<'_>, next_bytes: &Bound<'_, PyAny>) -> PyResult<()> {
+            self.inner.bind(py).call_method1("feed", (next_bytes,))?;
+            Ok(())
+        }
+
+        fn read_bytes(&self, py: Python<'_>, n: usize) -> PyResult<PyObject> {
+            Ok(self.inner.bind(py).call_method1("read_bytes", (n,))?.into())
+        }
+
+        fn skip(&self, py: Python<'_>) -> PyResult<()> {
+            self.inner.bind(py).call_method0("skip")?;
+            Ok(())
+        }
+
+        fn unpack(&self, py: Python<'_>) -> PyResult<PyObject> {
+            Ok(self.inner.bind(py).call_method0("unpack")?.into())
+        }
+
+        fn read_array_header(&self, py: Python<'_>) -> PyResult<PyObject> {
+            Ok(self.inner.bind(py).call_method0("read_array_header")?.into())
+        }
+
+        fn read_map_header(&self, py: Python<'_>) -> PyResult<PyObject> {
+            Ok(self.inner.bind(py).call_method0("read_map_header")?.into())
+        }
+
+        fn tell(&self, py: Python<'_>) -> PyResult<PyObject> {
+            Ok(self.inner.bind(py).call_method0("tell")?.into())
+        }
+
+        fn __iter__(slf: PyRef<'_, Self>) -> Py<Self> {
+            slf.into()
+        }
+
+        fn __next__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+            match self.inner.bind(py).call_method0("__next__") {
+                Ok(value) => Ok(Some(value.into())),
+                Err(err) => {
+                    if err.is_instance_of::<PyStopIteration>(py) {
+                        Ok(None)
+                    } else {
+                        Err(err)
+                    }
+                }
+            }
+        }
+
+        #[pyo3(name = "next")]
+        fn next_py(&self, py: Python<'_>) -> PyResult<PyObject> {
+            Ok(self.inner.bind(py).call_method0("__next__")?.into())
+        }
+
+        fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<PyObject> {
+            Ok(self.inner.bind(py).getattr(name)?.into())
+        }
     }
 
     fn pack(&self, py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyObject> {
@@ -170,7 +422,8 @@ fn _cmsgpack(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     let datetime = py.import("datetime")?;
 
     m.add_class::<Packer>()?;
-    for name in ["Unpacker", "unpackb"] {
+    m.add_class::<Unpacker>()?;
+    for name in ["unpackb"] {
         m.add(name, fallback.getattr(name)?)?;
     }
     for name in ["BufferFull", "ExtraData", "FormatError", "OutOfData", "StackError"] {
