@@ -13,6 +13,7 @@ Release Date: 2026-08-27
 - Prevent a buffer overflow when converting `Packer`'s `buf_size`. #726
 - Translate `RecursionError` to `StackError` in the fallback `Unpacker.skip()`. #727
 - Raise `OverflowError` when `use_single_float=True` cannot represent a value. #728
+- Build CPython 3.11+ wheels against the stable ABI.
 
 
 # 1.2.1

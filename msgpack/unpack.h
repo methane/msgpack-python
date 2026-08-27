@@ -31,6 +31,8 @@ typedef struct unpack_user {
     PyObject *timestamp_t;
     PyObject *giga;
     PyObject *utc;
+    PyObject *epoch;
+    PyObject *timedelta_t;
     const char *unicode_errors;
     Py_ssize_t max_str_len, max_bin_len, max_array_len, max_map_len, max_ext_len;
 } unpack_user;
@@ -140,10 +142,9 @@ static inline int unpack_callback_array(unpack_user* u, unsigned int n, msgpack_
 static inline int unpack_callback_array_item(unpack_user* u, unsigned int current, msgpack_unpack_object* c, msgpack_unpack_object o)
 {
     if (u->use_list)
-        PyList_SET_ITEM(*c, current, o);
+        return PyList_SetItem(*c, current, o);
     else
-        PyTuple_SET_ITEM(*c, current, o);
-    return 0;
+        return PyTuple_SetItem(*c, current, o);
 }
 
 static inline int unpack_callback_array_end(unpack_user* u, msgpack_unpack_object* c)
@@ -180,7 +181,13 @@ static inline int unpack_callback_map(unpack_user* u, unsigned int n, msgpack_un
 static inline int unpack_callback_map_item(unpack_user* u, unsigned int current, msgpack_unpack_object* c, msgpack_unpack_object k, msgpack_unpack_object v)
 {
     if (u->strict_map_key && !PyUnicode_CheckExact(k) && !PyBytes_CheckExact(k)) {
-        PyErr_Format(PyExc_ValueError, "%.100s is not allowed for map key when strict_map_key=True", Py_TYPE(k)->tp_name);
+        PyObject *type_name = PyObject_GetAttrString((PyObject *)Py_TYPE(k), "__name__");
+        if (type_name != NULL) {
+            PyErr_Format(PyExc_ValueError,
+                         "%.100U is not allowed for map key when strict_map_key=True",
+                         type_name);
+            Py_DECREF(type_name);
+        }
         return -1;
     }
     if (PyUnicode_CheckExact(k)) {
@@ -192,8 +199,7 @@ static inline int unpack_callback_map_item(unpack_user* u, unsigned int current,
             return -1;
         Py_DECREF(k);
         Py_DECREF(v);
-        PyList_SET_ITEM(*c, current, item);
-        return 0;
+        return PyList_SetItem(*c, current, item);
     }
     else if (PyDict_SetItem(*c, k, v) == 0) {
         Py_DECREF(k);
@@ -288,8 +294,6 @@ static int unpack_timestamp(const char* buf, unsigned int buflen, msgpack_timest
     return 0;
 }
 
-#include "datetime.h"
-
 static int unpack_callback_ext(unpack_user* u, const char* base, const char* pos,
                                unsigned int length, msgpack_unpack_object* o)
 {
@@ -343,12 +347,15 @@ static int unpack_callback_ext(unpack_user* u, const char* base, const char* pos
                             "days=%lld; too large to convert to C int", days);
                 return -1;
             }
-            PyObject *epoch = PyDateTimeAPI->DateTime_FromDateAndTime(1970, 1, 1, 0, 0, 0, 0, u->utc, PyDateTimeAPI->DateTimeType);
+            PyObject *epoch = Py_NewRef(u->epoch);
             if (epoch == NULL) {
                 return -1;
             }
 
-            PyObject* d = PyDelta_FromDSU((int)days, ts.tv_sec%(24*3600), ts.tv_nsec / 1000);
+            PyObject* d = PyObject_CallFunction(u->timedelta_t,
+                                                "(iik)", (int)days,
+                                                (int)(ts.tv_sec%(24*3600)),
+                                                ts.tv_nsec / 1000);
             if (d == NULL) {
                 Py_DECREF(epoch);
                 return -1;

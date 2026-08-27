@@ -16,6 +16,9 @@
  *    limitations under the License.
  */
 
+#include <float.h>
+#include <math.h>
+
 #if defined(__LITTLE_ENDIAN__)
 #define TAKE8_8(d)  ((uint8_t*)&d)[0]
 #define TAKE8_16(d) ((uint8_t*)&d)[0]
@@ -345,25 +348,25 @@ static inline int msgpack_pack_unsigned_long_long(msgpack_packer* x, unsigned lo
 static inline int msgpack_pack_float(msgpack_packer* x, double d)
 {
     unsigned char buf[5];
+    float f = (float)d;
+    uint32_t bits;
     buf[0] = 0xca;
-
-#if PY_VERSION_HEX >= 0x030B00A7
-    if (PyFloat_Pack4(d, (char *)&buf[1], 0) < 0) { return -1; }
-#else
-    if (_PyFloat_Pack4(d, &buf[1], 0) < 0) { return -1; }
-#endif
+    if (isfinite(d) && (d > FLT_MAX || d < -FLT_MAX)) {
+        PyErr_SetString(PyExc_OverflowError, "float too large to pack with f format");
+        return -1;
+    }
+    memcpy(&bits, &f, sizeof(bits));
+    _msgpack_store32(&buf[1], bits);
     msgpack_pack_append_buffer(x, buf, 5);
 }
 
 static inline int msgpack_pack_double(msgpack_packer* x, double d)
 {
     unsigned char buf[9];
+    uint64_t bits;
     buf[0] = 0xcb;
-#if PY_VERSION_HEX >= 0x030B00A7
-    PyFloat_Pack8(d, (char *)&buf[1], 0);
-#else
-    _PyFloat_Pack8(d, &buf[1], 0);
-#endif
+    memcpy(&bits, &d, sizeof(bits));
+    _msgpack_store64(&buf[1], bits);
     msgpack_pack_append_buffer(x, buf, 9);
 }
 

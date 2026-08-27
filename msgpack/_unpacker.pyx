@@ -33,6 +33,8 @@ cdef extern from "unpack.h":
         PyObject* timestamp_t
         PyObject *giga;
         PyObject *utc;
+        PyObject *epoch;
+        PyObject *timedelta_t;
         const char *unicode_errors
         Py_ssize_t max_str_len
         Py_ssize_t max_bin_len
@@ -110,6 +112,8 @@ cdef inline init_ctx(unpack_context *ctx,
     ctx.user.timestamp_t = <PyObject*>Timestamp
     ctx.user.giga = <PyObject*>giga
     ctx.user.utc = <PyObject*>utc
+    ctx.user.epoch = <PyObject*>epoch
+    ctx.user.timedelta_t = <PyObject*>timedelta
     ctx.user.unicode_errors = unicode_errors
 
 def default_read_extended_type(typecode, data):

@@ -1,9 +1,6 @@
 from cpython cimport *
 from cpython.bytearray cimport PyByteArray_Check, PyByteArray_CheckExact
-from cpython.datetime cimport (
-    PyDateTime_CheckExact, PyDelta_CheckExact,
-    datetime_tzinfo, timedelta_days, timedelta_seconds, timedelta_microseconds,
-)
+import datetime as _datetime
 
 cdef ExtType
 cdef Timestamp
@@ -183,9 +180,9 @@ cdef class Packer:
             else:
                 msgpack_pack_double(&self.pk, <double>o)
         elif PyBytesLike_CheckExact(o) if strict else PyBytesLike_Check(o):
-            L = Py_SIZE(o)
+            L = len(o)
             if L > ITEM_LIMIT:
-                PyErr_Format(ValueError, b"%.200s object is too large", Py_TYPE(o).tp_name)
+                raise ValueError(f"{type(o).__name__} object is too large")
             rawval = o
             msgpack_pack_bin(&self.pk, L)
             msgpack_pack_raw_body(&self.pk, rawval, L)
@@ -196,7 +193,7 @@ cdef class Packer:
                     raise ValueError("unicode string is too large")
             else:
                 o = PyUnicode_AsEncodedString(o, NULL, self.unicode_errors)
-                L = Py_SIZE(o)
+                L = len(o)
                 if L > ITEM_LIMIT:
                     raise ValueError("unicode string is too large")
                 rawval = o
@@ -223,7 +220,7 @@ cdef class Packer:
             ulval = o.nanoseconds
             msgpack_pack_timestamp(&self.pk, llval, ulval)
         elif PyList_CheckExact(o) if strict else (PyTuple_Check(o) or PyList_Check(o)):
-            L = Py_SIZE(o)
+            L = len(o)
             if L > ITEM_LIMIT:
                 raise ValueError("list is too large")
             msgpack_pack_array(&self.pk, L)
@@ -240,20 +237,20 @@ cdef class Packer:
                 msgpack_pack_raw_body(&self.pk, <char*>view.buf, L)
             finally:
                 PyBuffer_Release(&view);
-        elif self.datetime and PyDateTime_CheckExact(o) and datetime_tzinfo(o) is not None:
+        elif self.datetime and type(o) is _datetime.datetime and o.tzinfo is not None:
             delta = o - epoch
-            if not PyDelta_CheckExact(delta):
+            if type(delta) is not _datetime.timedelta:
                 raise ValueError("failed to calculate delta")
-            llval = timedelta_days(delta) * <long long>(24*60*60) + timedelta_seconds(delta)
-            ulval = timedelta_microseconds(delta) * 1000
+            llval = delta.days * <long long>(24*60*60) + delta.seconds
+            ulval = delta.microseconds * 1000
             msgpack_pack_timestamp(&self.pk, llval, ulval)
         elif will_default:
             return -2
-        elif self.datetime and PyDateTime_CheckExact(o):
+        elif self.datetime and type(o) is _datetime.datetime:
             # this should be later than will_default
-            PyErr_Format(ValueError, b"can not serialize '%.200s' object where tzinfo=None", Py_TYPE(o).tp_name)
+            raise ValueError(f"can not serialize '{type(o).__name__}' object where tzinfo=None")
         else:
-            PyErr_Format(TypeError, b"can not serialize '%.200s' object", Py_TYPE(o).tp_name)
+            raise TypeError(f"can not serialize '{type(o).__name__}' object")
 
     cdef int _pack(self, object o, int nest_limit=DEFAULT_RECURSE_LIMIT) except -1:
         cdef int ret
